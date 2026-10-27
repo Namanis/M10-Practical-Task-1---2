@@ -1,32 +1,91 @@
 package com.accenture.externalapis.demo.client;
 
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
+import com.accenture.externalapis.demo.dto.BookApiResponse;
+import com.accenture.externalapis.demo.dto.BookDto;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+import org.springframework.web.client.*;
 
-// TODO: Make this class implement BookRestClient.
+import java.util.ArrayList;
+import java.util.List;
+
+
 @Component
-public class BookRestClientImpl {
+public class BookRestClientImpl implements BookRestClient {
 
     private RestClient restClient;
 
     public BookRestClientImpl(RestClient.Builder builder, ExternalServiceProperties properties) {
-        // TODO: Build the RestClient using builder.baseUrl(properties.baseUrl()).build()
-        // and assign it to this.restClient
-        //
-        // Optional/bonus: this service doesn't require auth, but in a real API you would
-        // often also add builder.defaultHeader("Authorization", "Bearer " + token) here.
+        this.restClient = builder
+                .baseUrl(properties.baseUrl())
+                .defaultHeader("Authorization", "Bearer " + properties.token())
+                .build();
     }
 
-    // TODO: Implement getBook(Long id) - fetch one book from GET /books/{id} as a
-    // BookApiResponse, then map it onto a BookDto (only keep the fields BookDto needs).
-    //
-    // TODO: Handle the main RestClient error cases and rethrow them as ClientException:
-    //  - HttpClientErrorException (4xx, e.g. book not found)
-    //  - HttpServerErrorException (5xx, e.g. the faulty/teapot book)
-    //  - ResourceAccessException (connection refused / timeout - the external service is unreachable)
+    public BookDto getBook(Long id) {
+        try {
+            BookApiResponse response = restClient.get()
+                    .uri("/books/{id}", id)
+                    .retrieve()
+                    .body(BookApiResponse.class);
+            if (response == null) {
+                throw new ClientException("Empty response for book " + id);
+            }
+            return toDto(response);
+        } catch (RestClientException e) {
+            throw toClientException(e);
+        }
+    }
 
-    // TODO: Implement getAllBooks() - fetch all books from GET /books as
-    // BookApiResponse[], then map each one onto a BookDto. Handle the same error
-    // cases as getBook() above.
+
+    private BookDto toDto(BookApiResponse response) {
+        try {
+            return new BookDto(
+                    response.id(),
+                    response.title(),
+                    response.author(),
+                    response.price()
+            );
+        } catch (RestClientException e) {
+            throw toClientException(e);
+        }
+    }
+
+
+    public List<BookDto> getAllBooks() {
+        try {
+            BookApiResponse[] responses = restClient.get()
+                    .uri("/books")
+                    .retrieve()
+                    .body(BookApiResponse[].class);
+
+            List<BookDto> books = new ArrayList<>();
+            if (responses == null) {
+                throw new ClientException("Empty response for book list");
+            }
+            for (BookApiResponse response : responses) {
+                books.add(toDto(response));
+            }
+            return books;
+        } catch (RestClientException e) {
+            throw toClientException(e);
+        }
+
+
+    }
+
+    private ClientException toClientException(RestClientException e) {
+        if (e instanceof HttpClientErrorException exception) {
+            return new ClientException("Request rejected: " + exception.getStatusCode(),
+                    exception.getStatusCode().value(), e);
+        }
+        if (e instanceof HttpServerErrorException exception) {
+            return new ClientException("External service error: " + exception.getStatusCode(),
+                    exception.getStatusCode().value(), e);
+        }
+        if (e instanceof ResourceAccessException) {
+            return new ClientException("External service unreachable: " + e.getMessage(), null, e);
+        }
+        return new ClientException("Invalid response from external service: " + e.getMessage(), null, e);
+    }
 }
