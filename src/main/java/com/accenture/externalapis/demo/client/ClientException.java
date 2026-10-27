@@ -18,5 +18,5 @@ public class ClientException extends RuntimeException {
         super(message, cause);
         this.statusCode = statusCode;
     }
-    
+
 }
