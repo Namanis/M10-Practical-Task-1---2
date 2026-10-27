@@ -11,5 +11,5 @@ public class ExternalApisBootcampDemoApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(ExternalApisBootcampDemoApplication.class, args);
 	}
-
+	//just a check
 }
